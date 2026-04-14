@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    function isCoach() {
+      return hasRole('coach');
+    }
+    
+    function isSubscribed() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'active';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isCoach() || isAdmin());
+      allow write: if isSignedIn() && (isOwner(userId) || isAdmin());
+    }
+
+    // Courses collection
+    match /courses/{courseId} {
+      allow read: if isSignedIn(); // Everyone can see courses
+      allow write: if isAdmin();
+      
+      // Lessons sub-collection
+      match /lessons/{lessonId} {
+        allow read: if isSignedIn() && (
+          !resource.data.isPremium || isSubscribed() || isAdmin() || isCoach()
+        );
+        allow write: if isAdmin();
+      }
+    }
+
+    // Progress collection
+    match /progress/{progressId} {
+      allow read, write: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isOwner(request.resource.data.userId) || isCoach() || isAdmin()
+      );
+    }
+
+    // Chats collection
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.participants || isCoach() || isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid in resource.data.participants || isCoach() || isAdmin()
+      );
+
+      // Messages sub-collection
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isCoach() || isAdmin()
+        );
+        allow create: if isSignedIn();
+      }
+    }
+  }
+}

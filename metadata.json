@@ -1,0 +1,5 @@
+{
+  "name": "Evolution",
+  "description": "High-End Community- und Lern-App für Yoga-Ausbildung, Körperarbeit und KI-gestützte Kundenbetreuung.",
+  "requestFramePermissions": ["camera", "microphone"]
+}
